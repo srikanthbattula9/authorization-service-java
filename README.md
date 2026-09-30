@@ -55,7 +55,7 @@ One flow done properly, not four done halfway.
 | `/authorize` endpoint, four-rule decline chain, row-locked account access | done, manually verified against a live Postgres instance |
 | Recovery-point idempotency (begin/advance/finish) | done, manually verified incl. mismatch rejection |
 | Automated integration test (Testcontainers) | blocked locally by a Docker Desktop 4.80 / docker-java compatibility issue (see below); test code was written and removed pending a fix |
-| Unit tests | planned |
+| Unit tests (rule order, mocked repositories, no database/Docker required) | done, 8 tests |
 
 ### Why there's no integration test yet
 
