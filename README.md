@@ -89,5 +89,5 @@ curl -X POST http://127.0.0.1:8081/authorize \
 ## Stack
 
 Java 21, Spring Boot 4.1.1, Spring Data JDBC (hand-written SQL, not JPA),
-PostgreSQL, Apache Kafka client (added, not yet wired to publish — planned),
+PostgreSQL, Apache Kafka client, publishing authorization.decided events to the same card.transactions topic the Python service uses, verified live with a shared consumer,
 Maven, JUnit 5.

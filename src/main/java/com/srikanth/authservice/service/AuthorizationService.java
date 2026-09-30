@@ -5,6 +5,7 @@ import com.srikanth.authservice.dto.AuthorizeRequest;
 import com.srikanth.authservice.dto.AuthorizeResponse;
 import com.srikanth.authservice.repo.AuthorizationRepository;
 import com.srikanth.authservice.repo.IdempotencyRepository;
+import com.srikanth.authservice.events.AuthorizationEventPublisher;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ public class AuthorizationService {
 
     private final AuthorizationRepository authRepo;
     private final IdempotencyRepository idempotencyRepo;
+    private final AuthorizationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Value("${velocity.max-auths:5}")
@@ -37,9 +39,11 @@ public class AuthorizationService {
     @Value("${velocity.window-seconds:60}")
     private int velocityWindowSeconds;
 
-    public AuthorizationService(AuthorizationRepository authRepo, IdempotencyRepository idempotencyRepo) {
+    public AuthorizationService(AuthorizationRepository authRepo, IdempotencyRepository idempotencyRepo,
+                                AuthorizationEventPublisher eventPublisher) {
         this.authRepo = authRepo;
         this.idempotencyRepo = idempotencyRepo;
+        this.eventPublisher = eventPublisher;
     }
 
     public static class DeclineException extends RuntimeException {
@@ -101,6 +105,7 @@ public class AuthorizationService {
                 req.merchantId(), req.mcc(), status, declineCode, idempotencyKey, expiresAt);
 
         idempotencyRepo.finish(idempotencyKey);
+        eventPublisher.publishAuthorizationDecided(authId, status, declineCode, req.amountMinor());
 
         return new AuthorizeResponse(authId, status, declineCode);
     }

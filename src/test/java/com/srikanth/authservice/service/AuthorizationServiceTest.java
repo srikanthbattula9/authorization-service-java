@@ -4,6 +4,7 @@ import com.srikanth.authservice.dto.AuthorizeRequest;
 import com.srikanth.authservice.dto.AuthorizeResponse;
 import com.srikanth.authservice.repo.AuthorizationRepository;
 import com.srikanth.authservice.repo.IdempotencyRepository;
+import com.srikanth.authservice.events.AuthorizationEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,6 +29,7 @@ class AuthorizationServiceTest {
 
     @Mock AuthorizationRepository authRepo;
     @Mock IdempotencyRepository idempotencyRepo;
+    @Mock AuthorizationEventPublisher eventPublisher;
 
     AuthorizationService service;
 
@@ -36,7 +38,7 @@ class AuthorizationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new AuthorizationService(authRepo, idempotencyRepo);
+        service = new AuthorizationService(authRepo, idempotencyRepo, eventPublisher);
         ReflectionTestUtils.setField(service, "velocityMaxAuths", 5);
         ReflectionTestUtils.setField(service, "velocityWindowSeconds", 60);
         when(idempotencyRepo.begin(any(), any(), any()))
