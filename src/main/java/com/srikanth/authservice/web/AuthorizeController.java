@@ -25,9 +25,6 @@ public class AuthorizeController {
         try {
             AuthorizeResponse response = authorizationService.authorize(idempotencyKey, request);
             return ResponseEntity.ok(response);
-        } catch (AuthorizationService.DeclineException e) {
-            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
-                    .body(new AuthorizeResponse(null, "declined", e.code));
         } catch (IdempotencyRepository.RequestMismatch e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(e.getMessage());
         } catch (IdempotencyRepository.RequestInProgress e) {

@@ -125,24 +125,25 @@ class AuthorizationServiceTest {
         assertThat(response.status()).isEqualTo("approved");
         assertThat(response.declineCode()).isNull();
         verify(authRepo).insertAuthorization(any(), eq(CARD_TOKEN), eq(ACCOUNT_ID), eq(1000L),
-                any(), any(), eq("approved"), isNull(), eq("key-6"), any());
+                any(), any(), eq("approved"), isNull(), eq("key-6"), any(), eq(CARD_TOKEN));
         verify(idempotencyRepo).finish("key-6");
     }
 
     @Test
-    void invalidCardTokenThrowsDecline14() {
+    void invalidCardTokenIsDeclined14AndRecordedForAudit() {
         when(authRepo.findCardByToken(CARD_TOKEN)).thenReturn(Optional.empty());
 
-        assertThat(catchDeclineCode("key-7")).isEqualTo("14");
-    }
+        AuthorizeResponse response = service.authorize("key-7", request(1000, "5812"));
 
-    private String catchDeclineCode(String key) {
-        try {
-            service.authorize(key, request(1000, "5812"));
-            return null;
-        } catch (AuthorizationService.DeclineException e) {
-            return e.code;
-        }
+        assertThat(response.status()).isEqualTo("declined");
+        assertThat(response.declineCode()).isEqualTo("14");
+        // The attempt is recorded: no card, no account, raw token preserved.
+        verify(authRepo).insertAuthorization(any(), isNull(), isNull(), eq(1000L),
+                any(), any(), eq("declined"), eq("14"), eq("key-7"), any(), eq(CARD_TOKEN));
+        // With no account there is nothing to lock, and no later rule should run.
+        verify(authRepo, never()).lockAccount(anyLong());
+        verify(authRepo, never()).isMccBlocked(any());
+        verify(authRepo, never()).availableBalance(anyLong());
     }
 
     @Test

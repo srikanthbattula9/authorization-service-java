@@ -46,14 +46,6 @@ public class AuthorizationService {
         this.eventPublisher = eventPublisher;
     }
 
-    public static class DeclineException extends RuntimeException {
-        public final String code;
-        public DeclineException(String code, String reason) {
-            super(code + ": " + reason);
-            this.code = code;
-        }
-    }
-
     @Transactional
     public AuthorizeResponse authorize(String idempotencyKey, AuthorizeRequest req) {
         String bodyJson = canonicalJson(req);
@@ -65,14 +57,18 @@ public class AuthorizationService {
             return new AuthorizeResponse(stored.authId(), stored.status(), stored.declineCode());
         }
 
-        AuthorizationRepository.Card card = authRepo.findCardByToken(req.cardToken())
-                .orElseThrow(() -> new DeclineException("14", "invalid card number"));
+        AuthorizationRepository.Card card = authRepo.findCardByToken(req.cardToken()).orElse(null);
 
         String authId = UUID.randomUUID().toString();
         LocalDate today = LocalDate.now();
         String declineCode = null;
 
-        if (card.status().equals("frozen")) {
+        if (card == null) {
+            // No matching card: record the attempt for audit and fraud-signal purposes
+            // instead of rejecting before it can be logged. card_token and account_id
+            // stay null; the raw value received goes into attempted_card_token.
+            declineCode = "14";
+        } else if (card.status().equals("frozen")) {
             declineCode = "62";
         } else if (card.status().equals("closed")) {
             declineCode = "14";
@@ -101,8 +97,11 @@ public class AuthorizationService {
         String status = declineCode != null ? "declined" : "approved";
         Instant expiresAt = Instant.now().plus(24, ChronoUnit.HOURS);
 
-        authRepo.insertAuthorization(authId, req.cardToken(), card.accountId(), req.amountMinor(),
-                req.merchantId(), req.mcc(), status, declineCode, idempotencyKey, expiresAt);
+        authRepo.insertAuthorization(authId,
+                card == null ? null : req.cardToken(),
+                card == null ? null : card.accountId(),
+                req.amountMinor(), req.merchantId(), req.mcc(), status, declineCode,
+                idempotencyKey, expiresAt, req.cardToken());
 
         idempotencyRepo.finish(idempotencyKey);
         eventPublisher.publishAuthorizationDecided(authId, status, declineCode, req.amountMinor());

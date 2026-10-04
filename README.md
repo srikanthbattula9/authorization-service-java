@@ -37,8 +37,20 @@ One flow done properly, not four done halfway.
   up from `authorizations` by `idempotency_key` instead, since that row
   already holds everything needed. Same outcome, different mechanism.
 - **Shared database, not owned**: this service does not create or migrate
-  the schema. It expects the same seven tables the Python service's
-  `db/001_schema.sql` creates, already running.
+  the schema. It expects the tables the Python service's `db/001_schema.sql`
+  creates, plus migration `db/002_nullable_invalid_card_auth.sql` (nullable
+  `card_token` and `account_id`, and the `attempted_card_token` column),
+  already applied. Without 002 the unknown-card insert below fails.
+
+## Decline contract (matches the Python service)
+
+Every authorization decline returns HTTP 200 with `status: declined` and a
+`decline_code`. That includes a card token that matches no card: it is
+declined with code 14, and the attempt is recorded in `authorizations` with a
+NULL `card_token` and `account_id` and the raw value received in
+`attempted_card_token`, so repeated attempts against fake tokens stay visible.
+HTTP 409 is reserved for idempotency conflicts (same key with a different
+body, or a concurrent request on the same key).
 
 ## Verified manually (see below for why not automated yet)
 
@@ -47,12 +59,16 @@ One flow done properly, not four done halfway.
   identical `auth_id`, no second hold created.
 - Retried the same key with a different amount: rejected with HTTP 409 and
   a clear mismatch message.
+- Sent an authorization with a card token that matches no card: HTTP 200,
+  `status: declined`, `declineCode: 14`. The resulting `authorizations` row has
+  an empty `card_token` and `account_id` and the raw token in
+  `attempted_card_token`.
 
 ## Status
 
 | Module | State |
 |---|---|
-| `/authorize` endpoint, four-rule decline chain, row-locked account access | done, manually verified against a live Postgres instance |
+| `/authorize` endpoint: card status, expiry, MCC blocklist, velocity limit, balance (codes 62/14/54/57/61/51), unknown-card audit record, row-locked account access | done, manually verified against a live Postgres instance; rule order covered by 8 unit tests |
 | Recovery-point idempotency (begin/advance/finish) | done, manually verified incl. mismatch rejection |
 | Kafka producer (authorization.decided events on the shared card.transactions topic) | done, verified live against the Python consumer script |
 | Automated integration test (Testcontainers) | blocked locally by a Docker Desktop 4.80 / docker-java compatibility issue (see below); test code was written and removed pending a fix |

@@ -59,15 +59,19 @@ public class AuthorizationRepository {
         );
     }
 
-    public void insertAuthorization(String authId, String cardToken, long accountId, long amountMinor,
+    /**
+     * cardToken and accountId are null when no card matched the presented token.
+     * attemptedCardToken always holds the raw value received, for audit.
+     */
+    public void insertAuthorization(String authId, String cardToken, Long accountId, long amountMinor,
                                      String merchantId, String mcc, String status, String declineCode,
-                                     String idempotencyKey, Instant expiresAt) {
+                                     String idempotencyKey, Instant expiresAt, String attemptedCardToken) {
         jdbc.update(
                 "INSERT INTO authorizations (auth_id, card_token, account_id, amount_minor, merchant_id, " +
-                "mcc, status, decline_code, idempotency_key, expires_at) " +
-                "VALUES (?::uuid,?::uuid,?,?,?,?,?,?,?,?)",
+                "mcc, status, decline_code, idempotency_key, expires_at, attempted_card_token) " +
+                "VALUES (?::uuid,?::uuid,?,?,?,?,?,?,?,?,?)",
                 authId, cardToken, accountId, amountMinor, merchantId, mcc, status, declineCode,
-                idempotencyKey, java.sql.Timestamp.from(expiresAt)
+                idempotencyKey, java.sql.Timestamp.from(expiresAt), attemptedCardToken
         );
     }
 
