@@ -52,7 +52,7 @@ NULL `card_token` and `account_id` and the raw value received in
 HTTP 409 is reserved for idempotency conflicts (same key with a different
 body, or a concurrent request on the same key).
 
-## Verified manually (see below for why not automated yet)
+## Verified
 
 - Approved a real authorization against a funded test card.
 - Retried the identical request with the same idempotency key: returned the
@@ -71,24 +71,25 @@ body, or a concurrent request on the same key).
 | `/authorize` endpoint: card status, expiry, MCC blocklist, velocity limit, balance (codes 62/14/54/57/61/51), unknown-card audit record, row-locked account access | done, manually verified against a live Postgres instance; rule order covered by 8 unit tests |
 | Recovery-point idempotency (begin/advance/finish) | done, manually verified incl. mismatch rejection |
 | Kafka producer (authorization.decided events on the shared card.transactions topic) | done, verified live against the Python consumer script |
-| Automated integration test (Testcontainers) | blocked locally by a Docker Desktop 4.80 / docker-java compatibility issue (see below); test code was written and removed pending a fix |
+| Automated integration test (Testcontainers: Postgres + Kafka, full Spring context, real HTTP) | done -- 4 tests: approve, idempotent retry, conflicting retry rejected (409), unknown-card decline with audit row |
 | Unit tests (rule order, mocked repositories, no database/Docker required) | done, 8 tests, CI on every push |
 
-### Why there's no integration test yet
+### Integration test
 
-An integration test using Testcontainers (spin up a throwaway Postgres
-container, apply the schema fresh, run a real HTTP request through the whole
-Spring context) was written and does the right thing on paper, but fails
-locally with `Could not find a valid Docker environment`, even though Docker
-Desktop is running and reachable by the Docker CLI directly. The underlying
-call returns a malformed, empty daemon-info response, consistent with a
-version-negotiation mismatch between docker-java (the client library
-Testcontainers depends on) and Docker Desktop 4.80's engine (API 1.55),
-which is a very recent release. Tried Testcontainers 1.20.1, 1.20.4, and
-1.21.3; all three fail identically. This is an environment/tooling issue,
-not a defect in the authorization logic, which is independently verified by
-the manual curl-based checks above against the same live database the
-Python service's own test suite uses.
+Previously blocked locally by `Could not find a valid Docker environment`,
+even though Docker Desktop was running and reachable by the Docker CLI
+directly -- a version-negotiation mismatch between docker-java (the client
+library Testcontainers depends on) and Docker Desktop 4.80's engine (API
+1.55), which was a very recent release at the time. Fixed by bumping
+`testcontainers.version` from 1.21.3 to 1.21.4.
+
+`AuthorizeIntegrationTest` now runs for real: a throwaway Postgres container
+seeded from the Python service's own `db/001_schema.sql` and
+`db/002_nullable_invalid_card_auth.sql`, a throwaway Kafka broker, and a real
+HTTP request through the whole Spring context. Four tests: approve a funded
+card, idempotent retry returns the identical result, a conflicting retry is
+rejected with 409, and an unknown card token declines with code 14 and an
+audit row carrying the raw `attempted_card_token`.
 
 ## Running
 
